@@ -1,8 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-const { GoogleGenerativeAI } = require('@google-generativeai/generative-ai');
+// SAHI LINE YE HAI:
+const { GoogleGenerativeAI } = require('@google/generative-ai'); 
 
 const app = express();
+// ... baqi code wahi rahega jo maine pehle diya tha
+
 
 // 1. Middleware
 app.use(cors());
