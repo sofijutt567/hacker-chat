@@ -12,7 +12,7 @@ app.get('/', (req, res) => {
 app.post('/api/chat', async (req, res) => {
     try {
         const { prompt } = req.body;
-        const apiKey = process.env.GEMINI_API_KEY;
+        const apiKey = process.env.API_KEY_NEW;
 
         if (!prompt) return res.status(400).json({ reply: "Sawal khali hai." });
 
