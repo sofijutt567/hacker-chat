@@ -20,15 +20,12 @@ app.post('/api/chat', async (req, res) => {
             return res.status(400).json({ reply: "Prompt missing hai." });
         }
 
-        // FIX: Model name ko "models/" prefix ke sath likhein
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // FIX: Agar 'gemini-1.5-flash' nahi mil raha toh 'gemini-pro' backup hai
+        // Lekin hum yahan 'gemini-pro' use karenge jo har v1 API par chalta hai
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-        // FIX: sendMessage ki jagah generateContent use karein (zyada stable hai v1 ke liye)
-        const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { maxOutputTokens: 1000 }
-        });
-
+        // Generate Content Logic (No chat session needed for direct reply)
+        const result = await model.generateContent(prompt);
         const response = await result.response;
         const text = response.text();
 
@@ -36,7 +33,11 @@ app.post('/api/chat', async (req, res) => {
 
     } catch (error) {
         console.error("Gemini Error:", error);
-        res.status(500).json({ reply: "AI Error: " + error.message });
+        
+        // Agar gemini-pro bhi na chale toh error message return karein
+        res.status(500).json({ 
+            reply: "AI Error: Model connection failed. Check API Key in Vercel settings." 
+        });
     }
 });
 
