@@ -6,7 +6,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.send("HealthXRay Backend is Live (Stable Mode)!");
+    res.send("HealthXRay Backend is Live!");
 });
 
 app.post('/api/chat', async (req, res) => {
@@ -14,10 +14,10 @@ app.post('/api/chat', async (req, res) => {
         const { prompt } = req.body;
         const apiKey = process.env.GEMINI_API_KEY;
 
-        if (!prompt) return res.status(400).json({ reply: "Prompt missing hai." });
+        if (!prompt) return res.status(400).json({ reply: "Sawal likhein." });
 
-        // STABLE ENDPOINT: v1 use kar rahe hain aur model gemini-pro
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`;
+        // NAYI SETTING: v1beta aur gemini-1.5-flash
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
         const response = await fetch(url, {
             method: 'POST',
@@ -29,23 +29,19 @@ app.post('/api/chat', async (req, res) => {
 
         const data = await response.json();
 
-        // Agar Google error deta hai
         if (data.error) {
-            console.error("Google API Error Details:", data.error);
-            return res.status(data.error.code || 500).json({ reply: "Google API Error: " + data.error.message });
+            return res.status(500).json({ reply: "Google API Error: " + data.error.message });
         }
 
-        // Response extraction (Safe check ke sath)
-        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        if (data.candidates && data.candidates[0]) {
             const aiReply = data.candidates[0].content.parts[0].text;
             res.json({ reply: aiReply });
         } else {
-            res.json({ reply: "AI ne koi jawab nahi diya. Dubara koshish karein." });
+            res.json({ reply: "No response. Check API Key." });
         }
 
     } catch (error) {
-        console.error("Fetch Error:", error.message);
-        res.status(500).json({ reply: "Connection Error: " + error.message });
+        res.status(500).json({ reply: "System Error: " + error.message });
     }
 });
 
