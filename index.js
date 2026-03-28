@@ -6,7 +6,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.send("HealthXRay Backend is Live (Direct Mode)!");
+    res.send("HealthXRay Backend is Live (Stable Mode)!");
 });
 
 app.post('/api/chat', async (req, res) => {
@@ -16,8 +16,8 @@ app.post('/api/chat', async (req, res) => {
 
         if (!prompt) return res.status(400).json({ reply: "Prompt missing hai." });
 
-        // Direct Google API URL (No Library Needed)
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        // STABLE ENDPOINT: v1 use kar rahe hain aur model gemini-pro
+        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`;
 
         const response = await fetch(url, {
             method: 'POST',
@@ -29,17 +29,23 @@ app.post('/api/chat', async (req, res) => {
 
         const data = await response.json();
 
+        // Agar Google error deta hai
         if (data.error) {
-            throw new Error(data.error.message);
+            console.error("Google API Error Details:", data.error);
+            return res.status(data.error.code || 500).json({ reply: "Google API Error: " + data.error.message });
         }
 
-        // Response extraction
-        const aiReply = data.candidates[0].content.parts[0].text;
-        res.json({ reply: aiReply });
+        // Response extraction (Safe check ke sath)
+        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+            const aiReply = data.candidates[0].content.parts[0].text;
+            res.json({ reply: aiReply });
+        } else {
+            res.json({ reply: "AI ne koi jawab nahi diya. Dubara koshish karein." });
+        }
 
     } catch (error) {
-        console.error("Direct API Error:", error.message);
-        res.status(500).json({ reply: "Direct API Error: " + error.message });
+        console.error("Fetch Error:", error.message);
+        res.status(500).json({ reply: "Connection Error: " + error.message });
     }
 });
 
