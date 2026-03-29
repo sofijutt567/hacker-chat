@@ -21,14 +21,15 @@ app.get('/', (req, res) => {
 app.post('/api/chat', async (req, res) => {
     try {
         const { prompt } = req.body;
+        // Check both variable names just in case
         const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY_NEW;
 
-        if (!prompt) return res.status(400).json({ reply: "Prompt is required." });
+        if (!prompt) return res.status(400).json({ reply: "Prompt missing." });
         if (!apiKey) return res.status(500).json({ reply: "API Key missing in Vercel settings." });
 
         /**
-         * FIX: Hum v1beta use karenge kyunke flash model beta mein 
-         * zyada support hota hai free users ke liye.
+         * UPDATED URL:
+         * Google API v1beta requires this exact format for Gemini 1.5 Flash.
          */
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
@@ -38,39 +39,34 @@ app.post('/api/chat', async (req, res) => {
             body: JSON.stringify({
                 contents: [{
                     parts: [{ text: prompt }]
-                }],
-                generationConfig: {
-                    temperature: 0.7,
-                    maxOutputTokens: 1000
-                }
+                }]
             })
         });
 
         const data = await response.json();
 
-        // Agar Google koi error deta hai
+        // Handle Google API specific errors
         if (data.error) {
-            console.error("Google API Error:", data.error.message);
+            console.error("Google Error Details:", data.error);
             return res.status(data.error.code || 500).json({ 
-                reply: `Google Error: ${data.error.message}` 
+                reply: `Google API Error: ${data.error.message}` 
             });
         }
 
-        // Success Jawab
+        // Handle Success
         if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
-            const aiReply = data.candidates[0].content.parts[0].text;
-            res.json({ reply: aiReply });
+            res.json({ reply: data.candidates[0].content.parts[0].text });
         } else {
-            res.json({ reply: "AI ne koi jawab nahi diya. Prompt block ho gaya ya logic fail hui." });
+            res.json({ reply: "AI ne koi jawab nahi diya. Check Finish Reason: " + (data.candidates?.[0]?.finishReason || "Unknown") });
         }
 
     } catch (error) {
-        console.error("Server Crash Error:", error.message);
-        res.status(500).json({ reply: "Server Error: " + error.message });
+        console.error("Server Crash:", error.message);
+        res.status(500).json({ reply: "Internal Server Error: " + error.message });
     }
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server on ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 module.exports = app;
