@@ -3,16 +3,16 @@ const cors = require('cors');
 
 const app = express();
 
-// 1. Precise CORS Setup
+// 1. Precise CORS Setup (Har origin se request allow karega)
 app.use(cors({
-    origin: '*', // Production mein yahan apni frontend domain ka link dena behtar hai
+    origin: '*',
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
 
-// 2. Health Check Route (Hamesha JSON bhejein)
+// 2. Health Check Route
 app.get('/', (req, res) => {
     res.json({ 
         status: "Online", 
@@ -26,27 +26,33 @@ app.post('/api/chat', async (req, res) => {
     try {
         const { prompt } = req.body;
         
-        // API Key safety check
-        const apiKey = process.env.API_KEY_NEW || process.env.GEMINI_API_KEY;
+        // Vercel par 'GEMINI_API_KEY' naam se variable save hona chahiye
+        const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY_NEW;
 
         if (!prompt) {
             return res.status(400).json({ reply: "Sawal khali hai, kuch likh kar bhejein." });
         }
 
         if (!apiKey) {
-            console.error("CRITICAL ERROR: API Key is missing in Environment Variables.");
-            return res.status(500).json({ reply: "Backend Config Error: API Key nahi mili." });
+            console.error("CRITICAL ERROR: API Key is missing.");
+            return res.status(500).json({ reply: "Backend Error: API Key nahi mili (Vercel Settings check karein)." });
         }
 
-        const modelName = "gemini-1.5-flash";
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        /**
+         * STABLE MODEL CONFIGURATION
+         * Hum 'v1' (stable) aur 'gemini-1.5-flash' use kar rahe hain.
+         */
+        const modelName = "gemini-1.5-flash"; 
+        const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`;
 
-        // External API Call
+        // External API Call using Fetch
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
+                contents: [{ 
+                    parts: [{ text: prompt }] 
+                }],
                 generationConfig: {
                     temperature: 0.7,
                     maxOutputTokens: 1500,
@@ -56,38 +62,31 @@ app.post('/api/chat', async (req, res) => {
             })
         });
 
-        // Check if response is JSON
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-            const rawError = await response.text();
-            throw new Error(`Google API sent non-JSON response: ${rawError.substring(0, 100)}`);
-        }
-
         const data = await response.json();
 
-        // 4. Detailed Error Handling for Gemini
+        // Error handling for Gemini
         if (response.status === 429) {
-            return res.status(429).json({ reply: "Limit khatam! 1 minute baad koshish karein." });
+            return res.status(429).json({ reply: "Google limit khatam! 1 minute baad koshish karein." });
         }
 
         if (data.error) {
+            console.error("Google Error:", data.error.message);
             return res.status(500).json({ reply: `Google Error: ${data.error.message}` });
         }
 
-        // 5. Success Logic with Optional Chaining
+        // Response Logic
         const aiReply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (aiReply) {
             res.json({ reply: aiReply });
         } else {
-            // Check if blocked by safety filters
-            const finishReason = data?.candidates?.[0]?.finishReason;
-            res.json({ reply: `AI ne jawab nahi diya. Reason: ${finishReason || "Unknown"}` });
+            const reason = data?.candidates?.[0]?.finishReason || "Unknown";
+            res.json({ reply: `AI ne jawab nahi diya (Reason: ${reason}). Shayad content block ho gaya hai.` });
         }
 
     } catch (error) {
         console.error("Backend Server Error:", error.message);
-        res.status(500).json({ reply: "Backend Error: " + error.message });
+        res.status(500).json({ reply: "Backend Connection Error: " + error.message });
     }
 });
 
