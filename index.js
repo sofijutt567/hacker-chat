@@ -3,70 +3,69 @@ const cors = require('cors');
 
 const app = express();
 
-// 1. CORS Setup
-app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// 2. Health Check
-app.get('/', (req, res) => {
-    res.json({ status: "Live", message: "HealthXRay Backend is working!" });
-});
+app.get('/', (req, res) => res.send("API is Live!"));
 
-// 3. Main Chat Route
 app.post('/api/chat', async (req, res) => {
     try {
         const { prompt } = req.body;
-        // Check both variable names just in case
         const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY_NEW;
 
-        if (!prompt) return res.status(400).json({ reply: "Prompt missing." });
-        if (!apiKey) return res.status(500).json({ reply: "API Key missing in Vercel settings." });
+        if (!prompt || !apiKey) {
+            return res.status(400).json({ reply: "Missing prompt or API Key." });
+        }
 
         /**
-         * UPDATED URL:
-         * Google API v1beta requires this exact format for Gemini 1.5 Flash.
+         * VERSION CHANGE: 
+         * Agar v1beta 404 de raha hai, toh hum 'v1' use karenge 
+         * aur model name ko 'gemini-pro' ya 'gemini-1.5-flash' check karenge.
          */
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [{
-                    parts: [{ text: prompt }]
-                }]
+                contents: [{ parts: [{ text: prompt }] }]
             })
         });
 
         const data = await response.json();
 
-        // Handle Google API specific errors
-        if (data.error) {
-            console.error("Google Error Details:", data.error);
-            return res.status(data.error.code || 500).json({ 
-                reply: `Google API Error: ${data.error.message}` 
+        // Agar 404 abhi bhi aaye, toh gemini-pro try karein (Backup)
+        if (response.status === 404) {
+            console.log("Flash not found, trying Pro model...");
+            const backupUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`;
+            const backupRes = await fetch(backupUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
             });
+            const backupData = await backupRes.json();
+            
+            if (backupData.candidates) {
+                return res.json({ reply: backupData.candidates[0].content.parts[0].text });
+            }
         }
 
-        // Handle Success
-        if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
+        if (data.error) {
+            return res.status(data.error.code || 500).json({ reply: "Google Error: " + data.error.message });
+        }
+
+        if (data.candidates) {
             res.json({ reply: data.candidates[0].content.parts[0].text });
         } else {
-            res.json({ reply: "AI ne koi jawab nahi diya. Check Finish Reason: " + (data.candidates?.[0]?.finishReason || "Unknown") });
+            res.json({ reply: "AI ne koi jawab nahi diya." });
         }
 
     } catch (error) {
-        console.error("Server Crash:", error.message);
-        res.status(500).json({ reply: "Internal Server Error: " + error.message });
+        res.status(500).json({ reply: "Error: " + error.message });
     }
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log("Server Live"));
 
 module.exports = app;
