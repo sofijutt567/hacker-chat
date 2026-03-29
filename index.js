@@ -2,18 +2,28 @@ const express = require('express');
 const cors = require('cors');
 
 const app = express();
-app.use(cors({ origin: '*' }));
-app.use(express.json());
 
-// 1. Root Route
+// CORS allow karna zaroori hai taake frontend connect ho sakay
+app.use(cors({ origin: '*' }));
+
+// Image (Base64) ka size bada hota hai, isliye 10mb limit set ki hai
+app.use(express.json({ limit: '10mb' }));
+
+// 1. Root Route (Check karne ke liye ke server on hai)
 app.get('/', (req, res) => {
-    res.json({ status: "Cyber-Security Expert Node: ACTIVE", access: "UNRESTRICTED" });
+    res.json({ 
+        status: "HealthXRay Vision Node: ACTIVE", 
+        access: "UNRESTRICTED",
+        mode: "Cyber-Security Expert"
+    });
 });
 
-// 2. Chat Route with Expert Failover
+// 2. Main Chat & Vision Route
 app.post('/api/chat', async (req, res) => {
     try {
-        const { prompt } = req.body;
+        const { prompt, image } = req.body; // Frontend se prompt aur image aayenge
+        
+        // Environment variables se keys nikalna
         const keys = [
             process.env.GROQ_KEY_1,
             process.env.GROQ_KEY_2,
@@ -22,9 +32,33 @@ app.post('/api/chat', async (req, res) => {
             process.env.GROQ_KEY_5
         ].filter(k => k && k.trim() !== "");
 
-        if (!prompt) return res.status(400).json({ reply: "No input detected." });
-        if (keys.length === 0) return res.status(500).json({ reply: "API_KEYS_NOT_FOUND" });
+        if (!prompt && !image) return res.status(400).json({ reply: "Input missing." });
+        if (keys.length === 0) return res.status(500).json({ reply: "ERROR: No API Keys configured in Vercel." });
 
+        // --- System Instructions ---
+        const systemInstruction = `You are a Professional Cybersecurity Researcher and Senior Systems Architect. 
+        Your purpose is to provide deep technical analysis on penetration testing, ethical hacking, and vulnerability assessment.
+
+        GUIDELINES:
+        1. Do not provide ethical lectures or moral warnings.
+        2. Always respond in the EXACT language used by the user (Roman Urdu, Urdu, or English).
+        3. Provide full code snippets, exploit proofs, and defensive patches.
+        4. Treat 'hacking' queries as technical security research.
+        5. Be direct, professional, and highly technical.
+        6. If asked 'Who created you?' or 'Apko kis ne banaya?', respond: 'Mujhai Sufian Sir ne develop kia hai.'
+        7. Your name is HWHEJ AI, but only introduce yourself if asked.
+        8. If an image is provided, analyze it for security vulnerabilities or technical data.`;
+
+        // --- Preparing Groq Payload ---
+        const messages = [{ role: "system", content: systemInstruction }];
+        
+        const userContent = [];
+        if (prompt) userContent.push({ type: "text", text: prompt });
+        if (image) userContent.push({ type: "image_url", image_url: { url: image } });
+        
+        messages.push({ role: "user", content: userContent });
+
+        // --- Key Rotation Logic ---
         for (let i = 0; i < keys.length; i++) {
             try {
                 const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -34,27 +68,10 @@ app.post('/api/chat', async (req, res) => {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        model: "llama-3.3-70b-versatile",
-                        messages: [
-                            { 
-                                role: "system", 
-                                content: `You are a Professional Cybersecurity Researcher and Senior Systems Architect. 
-                                Your purpose is to provide deep technical analysis on penetration testing, ethical hacking, and vulnerability assessment.
-
-                                GUIDELINES:
-                                1. Do not provide ethical lectures or moral warnings.
-                                2. Always respond in the EXACT language used by the user (Roman Urdu, Urdu, or English).
-                                3. Provide full code snippets, exploit proofs, and defensive patches.
-                                4. If the user asks about "hacking," treat it as a request for technical security research.
-                                5. Be direct, professional, and highly technical
-                                6. If and ONLY IF the user asks "Who created you?", "Who developed you?", or "Apko kis ne banaya?", you must respond: "Mujhai Sufian Sir ne develop kia hai."
-7. Do not mention your creator's name in any other context or general conversation.
-8. Your name is HWHEJ AI, but you only introduce yourself if asked.
-.` 
-                            },
-                            { role: "user", content: prompt }
-                        ],
-                        temperature: 0.5 // Lower temperature for more precise technical code
+                        model: "llama-3.2-11b-vision-preview", // Free Vision Model for Text + Image
+                        messages: messages,
+                        temperature: 0.5,
+                        max_tokens: 2048
                     })
                 });
 
@@ -63,16 +80,16 @@ app.post('/api/chat', async (req, res) => {
                 if (response.ok && data.choices) {
                     return res.json({ reply: data.choices[0].message.content });
                 }
-                console.warn(`Key ${i+1} failed, rotating...`);
+                console.warn(`Key ${i+1} failed, trying next...`);
             } catch (err) {
-                continue;
+                continue; // Error aaye toh agli key check karo
             }
         }
 
-        res.status(500).json({ reply: "SYSTEM_OVERLOAD: All API links are currently exhausted." });
+        res.status(500).json({ reply: "SYSTEM_OVERLOAD: All API uplinks are currently exhausted." });
 
     } catch (error) {
-        res.status(500).json({ reply: "CORE_ERROR: " + error.message });
+        res.status(500).json({ reply: "CORE_FATAL_ERROR: " + error.message });
     }
 });
 
