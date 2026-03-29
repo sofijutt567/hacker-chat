@@ -22,7 +22,9 @@ app.post('/api/chat', async (req, res) => {
          * Agar v1beta 404 de raha hai, toh hum 'v1' use karenge 
          * aur model name ko 'gemini-pro' ya 'gemini-1.5-flash' check karenge.
          */
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        // Is URL ko copy karke replace karein:
+const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
 
         const response = await fetch(url, {
             method: 'POST',
